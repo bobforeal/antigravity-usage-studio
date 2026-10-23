@@ -88,6 +88,27 @@ class DesktopUsageStudio(tk.Tk):
 
         # Window Config - Standard Desktop Window (overrideredirect=False)
         self.title("Antigravity Usage Studio")
+
+        # Dark style for ttk scrollbars
+        self.style = ttk.Style()
+        try:
+            self.style.theme_use("clam")
+            self.style.configure(
+                "Vertical.TScrollbar",
+                gripcount=0,
+                background="#2a2a2a",
+                darkcolor="#1a1a1a",
+                lightcolor="#1a1a1a",
+                troughcolor="#141414",
+                bordercolor="#141414",
+                arrowcolor="#8c8c8c"
+            )
+            self.style.map(
+                "Vertical.TScrollbar",
+                background=[("active", "#3a3a3a"), ("pressed", "#4a4a4a")]
+            )
+        except Exception:
+            pass
         self.overrideredirect(False)
         self.configure(bg=self.C_BG)
 
@@ -117,9 +138,9 @@ class DesktopUsageStudio(tk.Tk):
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
         saved_w = self.settings.get("window_w", 1140)
-        saved_h = self.settings.get("window_h", 760)
+        saved_h = self.settings.get("window_h", 780)
         self.win_w = max(940, min(saved_w, screen_w - 60))
-        self.win_h = max(640, min(saved_h, screen_h - 60))
+        self.win_h = max(680, min(saved_h, screen_h - 60))
 
         saved_x = self.settings.get("window_x")
         saved_y = self.settings.get("window_y")
@@ -130,7 +151,7 @@ class DesktopUsageStudio(tk.Tk):
             y = max(20, (screen_h - self.win_h) // 2)
 
         self.geometry(f"{self.win_w}x{self.win_h}+{x}+{y}")
-        self.minsize(880, 620)
+        self.minsize(940, 680)
 
         # Live Data Cache
         self.proc_stats = {"running": False, "memory_mb": 0, "cpu_percent": 0.0, "process_count": 0}
@@ -339,7 +360,7 @@ class DesktopUsageStudio(tk.Tk):
     def setup_dashboard_view(self):
         # 3 KPI Cards Row
         self.kpi_row = tk.Frame(self.view_dashboard, bg=self.C_BG)
-        self.kpi_row.pack(fill=tk.X, pady=(0, 14))
+        self.kpi_row.pack(fill=tk.X, pady=(0, 10))
         self.kpi_row.columnconfigure(0, weight=1, uniform="kpi")
         self.kpi_row.columnconfigure(1, weight=1, uniform="kpi")
         self.kpi_row.columnconfigure(2, weight=1, uniform="kpi")
@@ -374,8 +395,8 @@ class DesktopUsageStudio(tk.Tk):
         # -------------------------------------------------------------
         # CHART CARD (Bar Chart / Heatmap Switcher)
         # -------------------------------------------------------------
-        self.chart_outer = tk.Frame(self.view_dashboard, bg=self.C_CARD, highlightbackground=self.C_BORDER, highlightthickness=1, padx=16, pady=12)
-        self.chart_outer.pack(fill=tk.X, pady=(0, 14))
+        self.chart_outer = tk.Frame(self.view_dashboard, bg=self.C_CARD, highlightbackground=self.C_BORDER, highlightthickness=1, padx=16, pady=10)
+        self.chart_outer.pack(fill=tk.X, pady=(0, 10))
 
         # Chart Header
         self.chart_hdr_frame = tk.Frame(self.chart_outer, bg=self.C_CARD)
@@ -429,7 +450,7 @@ class DesktopUsageStudio(tk.Tk):
 
         # Canvas for Bar Chart & Heatmap
         self.canvas_chart = tk.Canvas(
-            self.chart_outer, height=138, bg=self.C_CARD, highlightthickness=0, cursor="crosshair"
+            self.chart_outer, height=150, bg=self.C_CARD, highlightthickness=0, cursor="crosshair"
         )
         self.canvas_chart.pack(fill=tk.X)
         self.canvas_chart.bind("<Motion>", self.on_chart_canvas_hover)
@@ -438,7 +459,7 @@ class DesktopUsageStudio(tk.Tk):
         # -------------------------------------------------------------
         # USAGE BY MODEL CARD
         # -------------------------------------------------------------
-        self.table_card = tk.Frame(self.view_dashboard, bg=self.C_CARD, highlightbackground=self.C_BORDER, highlightthickness=1, padx=16, pady=12)
+        self.table_card = tk.Frame(self.view_dashboard, bg=self.C_CARD, highlightbackground=self.C_BORDER, highlightthickness=1, padx=16, pady=10)
         self.table_card.pack(fill=tk.BOTH, expand=True)
 
         # Table Header Row
@@ -497,7 +518,7 @@ class DesktopUsageStudio(tk.Tk):
             div = tk.Frame(self.table_card, bg=self.C_DIVIDER, height=1)
             div.pack(fill=tk.X)
 
-            row_f = tk.Frame(self.table_card, bg=self.C_CARD, padx=12, pady=6)
+            row_f = tk.Frame(self.table_card, bg=self.C_CARD, padx=12, pady=4)
             row_f.pack(fill=tk.X)
             self._setup_table_columns(row_f)
 
@@ -634,7 +655,7 @@ class DesktopUsageStudio(tk.Tk):
         self.sess_canvas_container.pack(fill=tk.BOTH, expand=True)
 
         self.sess_canvas = tk.Canvas(self.sess_canvas_container, bg=self.C_CARD, highlightthickness=0)
-        self.sess_scrollbar = ttk.Scrollbar(self.sess_canvas_container, orient="vertical", command=self.sess_canvas.yview)
+        self.sess_scrollbar = ttk.Scrollbar(self.sess_canvas_container, orient="vertical", command=self.sess_canvas.yview, style="Vertical.TScrollbar")
         self.sess_scrollable_frame = tk.Frame(self.sess_canvas, bg=self.C_CARD)
 
         self.sess_scrollable_frame.bind(
@@ -741,7 +762,7 @@ class DesktopUsageStudio(tk.Tk):
         self.quotas_canvas_container.pack(fill=tk.BOTH, expand=True)
 
         self.quotas_canvas = tk.Canvas(self.quotas_canvas_container, bg=self.C_CARD, highlightthickness=0)
-        self.quotas_scrollbar = ttk.Scrollbar(self.quotas_canvas_container, orient="vertical", command=self.quotas_canvas.yview)
+        self.quotas_scrollbar = ttk.Scrollbar(self.quotas_canvas_container, orient="vertical", command=self.quotas_canvas.yview, style="Vertical.TScrollbar")
         self.quotas_scrollable_frame = tk.Frame(self.quotas_canvas, bg=self.C_CARD)
 
         self.quotas_scrollable_frame.bind(
@@ -967,8 +988,8 @@ class DesktopUsageStudio(tk.Tk):
             return
 
         left_pad = 42
-        top_pad = 18
-        bot_pad = 24
+        top_pad = 20
+        bot_pad = 26
         right_pad = 14
 
         # Heatmap Palette (5 Intensity Levels)
@@ -980,28 +1001,36 @@ class DesktopUsageStudio(tk.Tk):
             "#52b788",  # 4: Very High
         ]
 
-        total_cols = len(weeks)
-        col_w = (w - left_pad - right_pad) / max(1, total_cols)
-        cell_size = max(8, min(14, int(col_w - 3)))
-        gap = max(2, int((col_w - cell_size)))
+        total_cols = len(weeks)  # 52 weeks
+        avail_h = h - top_pad - bot_pad
+        avail_w = w - left_pad - right_pad
 
-        # Weekday labels on the left (Mon, Wed, Fri)
+        cell_gap = 3
+        max_cell_h = (avail_h - 6 * cell_gap) // 7
+        step_x = avail_w / max(1, total_cols)
+        max_cell_w = int(step_x - cell_gap)
+
+        cell_size = max(8, min(max_cell_h, max_cell_w, 13))
+
+        # Day labels on the left (Mon, Wed, Fri) aligned with row centers
         day_labels = {0: "Mon", 2: "Wed", 4: "Fri"}
         for r_idx, d_name in day_labels.items():
-            ly = top_pad + r_idx * (cell_size + gap) + cell_size // 2
+            ly = top_pad + r_idx * (cell_size + cell_gap) + cell_size // 2
             c.create_text(left_pad - 8, ly, text=d_name, font=("Segoe UI", 7), fill=self.C_TEXT_MUTED, anchor="e")
 
-        # Draw Cells
+        # Draw Cells & Month Labels
+        last_month_x = -999
         for w_idx, week in enumerate(weeks):
-            cx = left_pad + w_idx * (cell_size + gap)
+            cx = int(left_pad + w_idx * step_x)
 
-            # Month Labels above columns
+            # Month Labels above columns (spaced at least 34px apart)
             m_lbl = week[0].get("month_label") or ""
-            if m_lbl:
+            if m_lbl and (cx - last_month_x >= 34):
                 c.create_text(cx, top_pad - 10, text=m_lbl, font=("Segoe UI", 7, "bold"), fill=self.C_TEXT_MUTED, anchor="w")
+                last_month_x = cx
 
             for r_idx, day_obj in enumerate(week):
-                cy = top_pad + r_idx * (cell_size + gap)
+                cy = top_pad + r_idx * (cell_size + cell_gap)
 
                 is_fut = day_obj.get("is_future", False)
                 is_tod = day_obj.get("is_today", False)
@@ -1045,7 +1074,7 @@ class DesktopUsageStudio(tk.Tk):
             )
         else:
             self.lbl_chart_sub.config(
-                text="22-week contribution grid with active streak and daily token intensity.",
+                text="52-week contribution grid with active streak and daily token intensity.",
                 fg=self.C_TEXT_MUTED
             )
 
@@ -1274,12 +1303,16 @@ class DesktopUsageStudio(tk.Tk):
                 lbl_pct = tk.Label(top_r, text=f"{rem:.1f}%", font=("Segoe UI", 11, "bold"), fg=q_col, bg=self.C_CARD_HEADER)
                 lbl_pct.pack(side=tk.RIGHT)
 
-                # Progress Bar
-                pbar_canvas = tk.Canvas(card, height=6, bg="#2a2a2a", highlightthickness=0)
+                # Progress Bar with dynamic resize tracking
+                pbar_canvas = tk.Canvas(card, height=6, bg="#242424", highlightthickness=0)
                 pbar_canvas.pack(fill=tk.X, pady=(8, 6))
-                pw = max(180, card.winfo_width() - 28)
-                bar_len = int((rem / 100.0) * pw)
-                pbar_canvas.create_rectangle(0, 0, bar_len, 6, fill=q_col, outline="")
+
+                def _draw_pbar(ev, c=pbar_canvas, pct=rem, col=q_col):
+                    c.delete("all")
+                    bar_w = int((pct / 100.0) * ev.width)
+                    c.create_rectangle(0, 0, bar_w, 6, fill=col, outline="")
+
+                pbar_canvas.bind("<Configure>", _draw_pbar)
 
                 # Bottom Info (Reset timer + model id)
                 bot_r = tk.Frame(card, bg=self.C_CARD_HEADER)

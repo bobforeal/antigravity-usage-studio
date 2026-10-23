@@ -26,7 +26,7 @@ DEFAULT_SETTINGS = {
     "chart_mode": "cost",              # 'cost', 'tokens', 'heatmap'
     "is_pinned": False,
     "window_w": 1140,
-    "window_h": 760,
+    "window_h": 780,
     "window_x": None,
     "window_y": None,
 }
@@ -675,9 +675,9 @@ class AntigravityDataCollector:
         cache_denom = total_input + total_cache
         cache_hit_pct = round((total_cache / cache_denom * 100.0), 1) if cache_denom > 0 else 0.0
 
-        # Build 22-week Contribution Heatmap Grid
+        # Build 52-week Contribution Heatmap Grid (Full Year)
         current_week_monday = today_date - timedelta(days=today_date.weekday())
-        heatmap_start_date = current_week_monday - timedelta(weeks=21)
+        heatmap_start_date = current_week_monday - timedelta(weeks=51)
 
         heatmap_weeks = []
         grid_total_tokens = 0
@@ -686,7 +686,7 @@ class AntigravityDataCollector:
         max_daily_tok = 0
 
         # Determine max daily tokens for relative scaling
-        for w_i in range(22):
+        for w_i in range(52):
             w_start = heatmap_start_date + timedelta(weeks=w_i)
             for d_i in range(7):
                 cur_d = w_start + timedelta(days=d_i)
@@ -696,7 +696,7 @@ class AntigravityDataCollector:
                     if d_info["tokens"] > max_daily_tok:
                         max_daily_tok = d_info["tokens"]
 
-        for w_i in range(22):
+        for w_i in range(52):
             week_days = []
             w_start = heatmap_start_date + timedelta(weeks=w_i)
             for d_i in range(7):
