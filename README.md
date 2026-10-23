@@ -1,9 +1,9 @@
-# Antigravity Usage Studio 🚀
+# Antigravity Usage Studio 🚀 (Native C++20 / Direct2D Edition)
 
-A polished, high-performance **Desktop Application** for developers using **Google Antigravity**. Monitor real-time workspace token consumption, cache efficiency, API-equivalent costs, and live model quotas across Gemini, Claude, and OpenAI with zero guesswork.
+A blazingly fast, zero-dependency **Native C++20 & Direct2D Desktop Application** for developers using **Google Antigravity**. Monitor real-time workspace token consumption, cache efficiency, API-equivalent costs, and live model quotas across Gemini, Claude, and OpenAI at a locked **60fps** with zero lag or flicker.
 
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=flat-square&logo=windows)
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![C++](https://img.shields.io/badge/C%2B%2B-20%20%7C%20Direct2D-00599C?style=flat-square&logo=c%2B%2B&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square)
 
 ---
@@ -70,34 +70,25 @@ A polished, high-performance **Desktop Application** for developers using **Goog
 
 ## 🚀 Quick Start
 
-### Option 1: Standalone Portable Executable (No Python Required)
+### Option 1: Standalone Native C++ Executable (1.5 MB — Zero Dependencies)
 1. Download or locate `antigravity-hud.exe`.
-2. Double-click **`antigravity-hud.exe`** to launch immediately.
+2. Double-click **`antigravity-hud.exe`** to launch immediately (instant startup, hardware-accelerated 60fps Direct2D UI).
 
-### Option 2: Run from Python Source
-1. Ensure Python 3.10+ is installed on Windows.
-2. Install dependencies:
-   ```powershell
-   pip install -r requirements.txt
-   ```
-3. Run the studio:
-   ```powershell
-   python hud_app.py
-   ```
-   *(Or double-click `run.bat`)*
-
----
-
-## 🛠️ Building the Standalone Executable
-
-To compile a clean single-file executable using PyInstaller:
-
+### Option 2: Build from C++20 Source (`g++` or `CMake`)
 ```powershell
-pip install pyinstaller psutil
-pyinstaller --noconsole --onefile --clean --name "antigravity-hud" hud_app.py
+g++ -std=c++20 -O3 -s -mwindows -Isrc src/main.cpp -o antigravity-hud.exe -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lwinhttp -liphlpapi -lws2_32 -lole32 -luuid -static
+```
+Or with CMake:
+```powershell
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
-The resulting standalone executable will be placed in `dist\antigravity-hud.exe`.
+### Option 3: Legacy Python Edition
+```powershell
+pip install -r requirements.txt
+python hud_app.py
+```
 
 ---
 
