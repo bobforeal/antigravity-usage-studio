@@ -8,6 +8,19 @@ A polished, high-performance **Desktop Application** for developers using **Goog
 
 ---
 
+## 📸 Preview
+
+### 1. Dashboard View (24-Hour Rolling Cost & Model Breakdown)
+![Dashboard View](assets/preview-dashboard.png)
+
+### 2. Activity Heatmap Mode (22-Week Contribution Grid & Active Streak)
+![Activity Heatmap](assets/preview-heatmap.png)
+
+### 3. Live Quotas View (13 Real-Time Language Server RPC Quotas)
+![Live Quotas](assets/preview-quotas.png)
+
+---
+
 ## 🌟 Key Features
 
 ### 1. 100% Real Token Accounting & Cost Engine

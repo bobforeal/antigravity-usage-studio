@@ -116,10 +116,10 @@ class DesktopUsageStudio(tk.Tk):
         # Geometry Setup
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
-        saved_w = self.settings.get("window_w", 1060)
-        saved_h = self.settings.get("window_h", 740)
-        self.win_w = max(880, min(saved_w, screen_w - 60))
-        self.win_h = max(620, min(saved_h, screen_h - 60))
+        saved_w = self.settings.get("window_w", 1140)
+        saved_h = self.settings.get("window_h", 760)
+        self.win_w = max(940, min(saved_w, screen_w - 60))
+        self.win_h = max(640, min(saved_h, screen_h - 60))
 
         saved_x = self.settings.get("window_x")
         saved_y = self.settings.get("window_y")
@@ -236,7 +236,7 @@ class DesktopUsageStudio(tk.Tk):
 
         # Center / View Tabs
         self.tabs_container = tk.Frame(self.top_app_bar, bg=self.C_CARD, highlightbackground=self.C_BORDER, highlightthickness=1)
-        self.tabs_container.pack(side=tk.LEFT, padx=(30, 0), pady=2)
+        self.tabs_container.pack(side=tk.LEFT, padx=(18, 0), pady=2)
 
         self.tab_buttons = {}
         tabs = [
@@ -1369,7 +1369,8 @@ class DesktopUsageStudio(tk.Tk):
                 p_pct = pm.get("remaining_pct", 100.0)
                 p_rst = f" ({pm['reset_relative']})" if pm.get("reset_relative") else ""
                 s_pct = sm.get("remaining_pct", 100.0)
-                pill_txt = f"● Connected · {q.get('tier', 'Pro')} · Gemini: {p_pct:.1f}%{p_rst} · Claude: {s_pct:.0f}%"
+                tier_str = q.get('tier', 'Pro').replace('Google AI ', '')
+                pill_txt = f"● {tier_str} · Gem: {p_pct:.0f}%{p_rst} · Claude: {s_pct:.0f}%"
                 pill_fg = self.C_GREEN if p_pct >= 40 else (self.C_AMBER if p_pct >= 15 else self.C_RED)
                 self.lbl_rpc_badge.config(text=pill_txt, fg=pill_fg)
             else:

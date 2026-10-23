@@ -25,8 +25,8 @@ DEFAULT_SETTINGS = {
     "selected_range": "today_active",  # 'today_active', 'today_24h', '7d', '30d', 'all'
     "chart_mode": "cost",              # 'cost', 'tokens', 'heatmap'
     "is_pinned": False,
-    "window_w": 1060,
-    "window_h": 740,
+    "window_w": 1140,
+    "window_h": 760,
     "window_x": None,
     "window_y": None,
 }
