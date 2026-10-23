@@ -10,48 +10,61 @@ A polished, high-performance **Desktop Application** for developers using **Goog
 
 ## 📸 Preview
 
-### 1. Dashboard View (24-Hour Rolling Cost & Model Breakdown)
-![Dashboard View](assets/preview-dashboard.png)
+### 1. Antigravity CLI Workspace & Terminal
+![Antigravity CLI Workspace](assets/preview-cli.png)
 
-### 2. Activity Heatmap Mode (22-Week Contribution Grid & Active Streak)
-![Activity Heatmap](assets/preview-heatmap.png)
+### 2. Parallel Multi-Agent Orchestrator
+![Parallel Agent Orchestrator](assets/preview-orchestrator.png)
 
-### 3. Live Quotas View (13 Real-Time Language Server RPC Quotas)
+### 3. Usage Analytics & Rolling Hourly Cost
+![Usage Analytics](assets/preview-dashboard.png)
+
+### 4. 52-Week Full-Year Activity Heatmap Mode
+![52-Week Activity Heatmap](assets/preview-heatmap.png)
+
+### 5. Live Antigravity Language Server Quotas & Limits
 ![Live Quotas](assets/preview-quotas.png)
 
 ---
 
 ## 🌟 Key Features
 
-### 1. 100% Real Token Accounting & Cost Engine
+### 1. Claude Code Desktop / Cursor Studio Frameless Aesthetic
+- **Frameless Desktop App**: Smooth Windows 11 DWM rounded corners, 1px `#262626` outer border, custom traffic lights (`🔴 🟡 🟢`), window drag/double-click maximize, and bottom-right resize grip (`◿`).
+- **All-Round Card Architecture**: Every card, KPI box, terminal input, and button features smooth rounded corners (`RoundedCard`) with dark monochrome styling.
+- **Taskbar Integration**: Cleanly integrates into the Windows taskbar with native minimize/restore and taskbar icon.
+- **Collapsible File Explorer Sidebar**: Browse project workspace files with file extension badges (`PY`, `MD`, `JSON`, `BAT`, `EXE`, `TXT`).
+
+### 2. Built-in Parallel Antigravity CLI Engine (`✻ Antigravity CLI`)
+- **Multiple Parallel CLI Tabs**: Spawn concurrent `✻ Antigravity CLI N` tabs via the `+` button in the integrated title bar or open external native terminals (`↗`).
+- **Interactive Effort & Model Selector**: Choose reasoning effort on the fly (`low` · `medium` · `high` · `max`) and switch models via the header dropdown (`▾`) or `/effort` slash command.
+- **Signature Coral Welcome Card**: Features an animated 8-bit mascot creature (with subtle breathing & blinking), active model + effort badge, tips, and recent session telemetry.
+- **Structured Terminal Stream**: Claude Code-style tool badges (`● Explore`, `● Write`, `● RunTests`) with syntax boxes and real-time `agy.exe` execution outputs.
+- **Bottom Command Input**: Fast prompt entry bar with `Run ↵`, `⏹ Stop`, and slash commands (`/init`, `/plan`, `/effort`, `/models`, `/status`, `/clear`).
+
+### 3. Parallel Multi-Agent Orchestrator (`🎯 Orchestrator`)
+- **Global & Per-Worker Effort Control**: Switch all workers at once via `All Effort: [low] [medium] [high] [max]` or customize the model (`▾`) and effort (`low` · `medium` · `high` · `max`) individually on each worker card (with `Gemini 3.8 Flash (Medium)` configured as the fast coding default).
+- **Master Goal Decomposition**: Enter high-level features and click `⚡ Auto-Split Goal` to distribute subtasks across concurrent agents.
+- **2×2 Worker Grid with 60fps Progress Waves**: Concurrent execution cards for Architecture & Core, UI & Styling, Verification & Tests, and Docs & Release with live animated progress bars, status spinners, and console preview streams.
+- **One-Click Dispatch**: Trigger all workers simultaneously with `▶ Dispatch All Parallel` or inspect any worker in a dedicated CLI tab.
+
+### 4. 100% Real Token Accounting & Cost Engine
 - **No approximations or fake step multipliers**: Tokens are calculated strictly using real execution telemetry:  
   $$\text{Total Tokens} = \text{Input Tokens} + \text{Cache Read Tokens} + \text{Output Tokens}$$
 - **Real-time Cache Hit Percentage**:
   $$\text{Cache Hit \%} = \frac{\text{Cache Read Tokens}}{\text{Input Tokens} + \text{Cache Read Tokens}} \times 100$$
 - **API-Equivalent Cost Engine**: Tracks cumulative cost burn based on official model family pricing per 1M tokens (Claude Opus / Sonnet, Gemini 4 Argon, Gemini 3.8 Flash, GPT-OSS).
 
-### 2. Three Dedicated Studio Views
-- 📊 **Dashboard View**:
-  - **3 KPI Cards**: `Total cost`, `Requests`, and `Tokens` with clear breakdown subtitles (`Cache Hit %`, `Input / Cache / Output`).
-  - **Dual Chart Modes**:
-    - **Hourly Cost & Hourly Tokens**: 24 rolling hourly buckets with interactive hover tooltips and dashed guidelines.
-    - **Activity Heatmap**: 22-week × 7-day contribution grid (GitHub / Claude Code style) with active streak counter (`🔥 Xd streak`), active days, total steps, and daily token hover inspection.
-  - **Usage by Model Table**: Up to 8 active models with provider badges (`GO` Google, `CL` Anthropic, `OA` OpenAI), request counts, input/cache/output tokens, live quota remaining %, and cost.
-- 🗂️ **Sessions View**:
-  - Full table of recent workspace sessions (top 40).
-  - Clean titles resolved from `conversation_summaries.db` or parsed from `<USER_REQUEST>` prompt tags.
-  - Real-time search filter by title, model, or session ID.
+### 5. Deep Studio Views
+- 📊 **Usage Dashboard**:
+  - **3 KPI Cards**: `Total cost`, `Requests`, and `Tokens` with breakdown metrics (`Cache Hit %`, `Input / Cache / Output`).
+  - **Dual Chart Modes**: 24 rolling hourly buckets with interactive tooltips, or full 52-week activity contribution heatmap with streaks and intensity scales.
+  - **Usage by Model Table**: Up to 8 active models with provider badges (`GO`, `CL`, `OA`), request counts, tokens, live quotas, and cost burn.
 - ⚡ **Live Quotas View**:
   - Direct real-time RPC connection to the local Antigravity Language Server (`LanguageServerService/GetUserStatus`).
-  - All 13 models tracked with live visual progress bars, remaining %, and countdown timers (e.g. `⏳ Resets in 4h 54m`).
-  - Prompt credits indicator.
-
-### 3. Native Windows Desktop Polish
-- **Standard Windows OS Window**: Full maximize, minimize, resize handles, and taskbar icon (`overrideredirect(False)`).
-- **Windows 11/10 Immersive Dark Title Bar**: Leverages native `DwmSetWindowAttribute` (`DWMWA_USE_IMMERSIVE_DARK_MODE`).
-- **Flexible Time Ranges**: One-click toggling between `Today`, `24h`, `7 Days`, `30 Days`, and `All Time`.
-- **One-Click Markdown Export**: Copy formatted telemetry tables directly to your clipboard.
-- **Optional Always on Top (📌)**: Toggle anytime from the top app bar.
+  - All 13 models tracked with live visual progress bars, remaining %, and countdown timers (e.g. `⏳ Resets in 1h 36m`).
+- 🗂️ **Sessions View**:
+  - Full table of recent workspace sessions (top 40) with real-time search filtering.
 
 ---
 

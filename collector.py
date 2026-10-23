@@ -21,9 +21,10 @@ def _get_app_dir():
 SETTINGS_FILE = os.path.join(_get_app_dir(), "hud_settings.json")
 
 DEFAULT_SETTINGS = {
-    "selected_view": "dashboard",      # 'dashboard', 'sessions', 'quotas'
+    "selected_view": "cli_1",          # 'cli_1', 'usage', 'orchestrator', 'quotas', 'sessions'
     "selected_range": "today_active",  # 'today_active', 'today_24h', '7d', '30d', 'all'
     "chart_mode": "cost",              # 'cost', 'tokens', 'heatmap'
+    "default_effort": "medium",        # 'low', 'medium', 'high', 'max'
     "is_pinned": False,
     "window_w": 1140,
     "window_h": 780,
@@ -367,6 +368,20 @@ class AntigravityDataCollector:
             models.append(m_obj)
             models_by_label[label] = m_obj
 
+        # Deterministic sort order so the RPC's random dict/map iteration never shuffles the UI
+        _EFFORT_ORDER = {"(high)": 0, "(medium)": 1, "(low)": 2}
+        def _model_sort_key(m):
+            lbl = m["label"]
+            base = lbl.split("(")[0].strip()
+            eff_rank = 3
+            for k, r in _EFFORT_ORDER.items():
+                if k in lbl.lower():
+                    eff_rank = r
+                    break
+            return (m["provider"], base, eff_rank, lbl)
+
+        models.sort(key=_model_sort_key)
+
         primary = None
         if cls._latest_detected_model and cls._latest_detected_model in models_by_label:
             primary = models_by_label[cls._latest_detected_model]
@@ -438,7 +453,7 @@ class AntigravityDataCollector:
         fallback_date_str = dt_fallback.strftime("%Y-%m-%d")
 
         step_count = 0
-        current_model = "Gemini 3.8 Flash (High)"
+        current_model = "Gemini 3.8 Flash (Medium)"
         detected_model = None
         first_prompt = ""
         events = []  # List of (timestamp_epoch, date_str, hour_int, model_label, inp, cache, out, cost)
@@ -811,7 +826,7 @@ class AntigravityDataCollector:
         key_models = [
             "Gemini 4 Argon (High)",
             "Gemini 4 Argon (Medium)",
-            "Gemini 3.8 Flash (High)",
+            "Gemini 3.8 Flash (Medium)",
             "Claude Sonnet 5.5 (High)",
             "Claude Opus 5.5 (High)",
             "GPT-OSS 120B (Medium)"
