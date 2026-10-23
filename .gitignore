@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller
+*.manifest
+*.spec
+build/
+build_tmp/
+dist/
+
+# Local User Settings & State
+hud_settings.json
+*.log
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Editor directories
+.vscode/
+.idea/
