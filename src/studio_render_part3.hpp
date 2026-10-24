@@ -32,12 +32,25 @@
         DrawCard(rangeBox, 6.0f, COL_CARD, COL_BORDER);
 
         float rx = rangeBox.left + 4.0f;
+        D2D1_RECT_F rangeActRect{};
+        for (const auto& rg : ranges) {
+            D2D1_RECT_F rr = D2D1::RectF(rx, rangeBox.top + 3.0f, rx + rg.w, rangeBox.bottom - 3.0f);
+            if (selected_range == rg.key) rangeActRect = rr;
+            rx += rg.w + 2.0f;
+        }
+        if (rangeActRect.right > rangeActRect.left) {
+            UpdateAndDrawSlidingPill("usage_range", rangeActRect, 4.0f, COL_PILL_ACT, HexColor(0x3E3E46), COL_BLUE);
+        }
+
+        rx = rangeBox.left + 4.0f;
         for (const auto& rg : ranges) {
             D2D1_RECT_F rr = D2D1::RectF(rx, rangeBox.top + 3.0f, rx + rg.w, rangeBox.bottom - 3.0f);
             bool isAct = (selected_range == rg.key);
-            if (isAct) FillRoundRect(rr, 4.0f, COL_PILL_ACT);
-            DrawTextUtf8(rg.lbl, isAct ? tfBold7 : tfRegular7, rr, isAct ? COL_TEXT_MAIN : COL_TEXT_MUTED, DWRITE_TEXT_ALIGNMENT_CENTER);
-            AddHit(std::string("range:") + rg.key, rr);
+            std::string hitKey = std::string("range:") + rg.key;
+            bool isHov = (hovered_id == hitKey);
+            if (!isAct && isHov) FillRoundRect(rr, 4.0f, HexColor(0x1E1E22));
+            DrawTextUtf8(rg.lbl, isAct ? tfBold7 : tfRegular7, rr, isAct ? COL_TEXT_MAIN : (isHov ? COL_TEXT_MAIN : COL_TEXT_MUTED), DWRITE_TEXT_ALIGNMENT_CENTER);
+            AddHit(hitKey, rr);
             rx += rg.w + 2.0f;
         }
 
@@ -53,14 +66,19 @@
         DrawTextUtf8(FormatCost(kpi_disp_cost), tfBold18, D2D1::RectF(k1.left + 16.0f, k1.top + 30.0f, k1.right - 16.0f, k1.top + 64.0f), COL_TEXT_MAIN);
         DrawTextUtf8("API-Equivalent Burn", tfRegular7, D2D1::RectF(k1.left + 16.0f, k1.top + 66.0f, k1.right - 16.0f, k1.bottom - 8.0f), COL_TEXT_DIM);
 
-        // KPI 2: Requests
+        // KPI 2: Requests + Weekly Limit Summary
         D2D1_RECT_F k2 = D2D1::RectF(k1.right + 12.0f, kpiTop, k1.right + 12.0f + kpiW, kpiTop + kpiH);
         DrawCard(k2, 10.0f, COL_CARD, COL_BORDER);
         DrawTextUtf8("Requests", tfRegular8, D2D1::RectF(k2.left + 16.0f, k2.top + 10.0f, k2.right - 16.0f, k2.top + 28.0f), COL_TEXT_MUTED);
         DrawTextUtf8(FormatWithCommas(static_cast<long long>(std::round(kpi_disp_reqs))), tfBold18,
                      D2D1::RectF(k2.left + 16.0f, k2.top + 30.0f, k2.right - 16.0f, k2.top + 64.0f), COL_TEXT_MAIN);
-        char chBuf[64];
-        std::snprintf(chBuf, sizeof(chBuf), "Cache Hit: %.1f%%", d.cache_hit_pct);
+        double wkPct = 100.0;
+        {
+            std::lock_guard<std::mutex> lk(data_mutex);
+            wkPct = quota_data.weekly_remaining_pct;
+        }
+        char chBuf[96];
+        std::snprintf(chBuf, sizeof(chBuf), "Cache Hit: %.1f%%  \xC2\xB7  Weekly Limit: %.1f%%", d.cache_hit_pct, wkPct);
         DrawTextUtf8(chBuf, tfRegular7, D2D1::RectF(k2.left + 16.0f, k2.top + 66.0f, k2.right - 16.0f, k2.bottom - 8.0f), COL_GREEN);
 
         // KPI 3: Tokens
@@ -111,12 +129,25 @@
         D2D1_RECT_F cmBox = D2D1::RectF(chartCard.right - cmTotalW - 14.0f, chartCard.top + 10.0f, chartCard.right - 14.0f, chartCard.top + 34.0f);
         DrawCard(cmBox, 6.0f, COL_CARD_HDR, COL_BORDER);
         float cmx = cmBox.left + 3.0f;
+        D2D1_RECT_F cmActRect{};
+        for (const auto& cm : cmodes) {
+            D2D1_RECT_F mr = D2D1::RectF(cmx, cmBox.top + 2.0f, cmx + cm.w, cmBox.bottom - 2.0f);
+            if (chart_mode == cm.key) cmActRect = mr;
+            cmx += cm.w + 2.0f;
+        }
+        if (cmActRect.right > cmActRect.left) {
+            UpdateAndDrawSlidingPill("usage_cmode", cmActRect, 4.0f, COL_PILL_ACT, HexColor(0x3E3E46), COL_GREEN);
+        }
+
+        cmx = cmBox.left + 3.0f;
         for (const auto& cm : cmodes) {
             D2D1_RECT_F mr = D2D1::RectF(cmx, cmBox.top + 2.0f, cmx + cm.w, cmBox.bottom - 2.0f);
             bool isAct = (chart_mode == cm.key);
-            if (isAct) FillRoundRect(mr, 4.0f, COL_PILL_ACT);
-            DrawTextUtf8(cm.lbl, isAct ? tfBold7 : tfRegular7, mr, isAct ? COL_TEXT_MAIN : COL_TEXT_MUTED, DWRITE_TEXT_ALIGNMENT_CENTER);
-            AddHit(std::string("cmode:") + cm.key, mr);
+            std::string hitKey = std::string("cmode:") + cm.key;
+            bool isHov = (hovered_id == hitKey);
+            if (!isAct && isHov) FillRoundRect(mr, 4.0f, HexColor(0x1E1E22));
+            DrawTextUtf8(cm.lbl, isAct ? tfBold7 : tfRegular7, mr, isAct ? COL_TEXT_MAIN : (isHov ? COL_TEXT_MAIN : COL_TEXT_MUTED), DWRITE_TEXT_ALIGNMENT_CENTER);
+            AddHit(hitKey, mr);
             cmx += cm.w + 2.0f;
         }
 

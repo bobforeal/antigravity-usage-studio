@@ -3,9 +3,11 @@
     // ========================================================================
     void RenderQuotasView(const D2D1_RECT_F& r) {
         QuotaData q;
+        std::map<std::string, float> lerpSnap;
         {
             std::lock_guard<std::mutex> lk(data_mutex);
             q = quota_data;
+            lerpSnap = quota_bar_lerp;
         }
 
         // Header Row
@@ -33,6 +35,77 @@
         float cardH = 82.0f;
         float ease = 1.0f - std::pow(1.0f - quotas_anim, 3.0f);
 
+        // ====================================================================
+        // TOP SUMMARY ROW: Gemini Pool (5h + Weekly)  |  Claude & GPT Pool (5h + Weekly)
+        // ====================================================================
+        float sumH = 110.0f;
+        if (curY + sumH >= scrollArea.top && curY <= scrollArea.bottom) {
+            auto drawPoolSummaryCard = [&](float cx, const char* badgeTxt, D2D1_COLOR_F accentCol, D2D1_COLOR_F bdrCol,
+                                           const char* titleTxt, const char* subModelsTxt,
+                                           float pct5h, const std::string& rst5h,
+                                           float pctWk, const std::string& rstWk) {
+                D2D1_RECT_F cardR = D2D1::RectF(cx, curY, cx + colW, curY + sumH);
+                DrawCard(cardR, 10.0f, HexColor(0x141519), bdrCol, 1.2f);
+
+                float inL = cardR.left + 14.0f;
+                float inR = cardR.right - 14.0f;
+                float barW = inR - inL;
+
+                // Header Badge + Pool Title + Models Subtitle
+                D2D1_RECT_F bdgR = D2D1::RectF(inL, cardR.top + 10.0f, inL + 24.0f, cardR.top + 26.0f);
+                FillRoundRect(bdgR, 3.5f, COL_PILL_BG);
+                DrawTextUtf8(badgeTxt, tfMonoBold7, bdgR, accentCol, DWRITE_TEXT_ALIGNMENT_CENTER);
+
+                DrawTextUtf8(titleTxt, tfBold8, D2D1::RectF(inL + 30.0f, cardR.top + 9.0f, inR, cardR.top + 27.0f), COL_TEXT_MAIN);
+                DrawTextUtf8(subModelsTxt, tfRegular7, D2D1::RectF(inL + 30.0f, cardR.top + 24.0f, inR, cardR.top + 38.0f), COL_TEXT_MUTED);
+
+                // Bar 1: 5-Hour Limit Remaining
+                float y5 = cardR.top + 43.0f;
+                DrawTextUtf8("5-Hour Limit Remaining", tfBold7, D2D1::RectF(inL, y5, inL + 150.0f, y5 + 15.0f), COL_TEXT_MAIN);
+                char b5[64];
+                std::snprintf(b5, sizeof(b5), "\xE2\x8F\xB3 %s  \xC2\xB7  %.1f%%", rst5h.c_str(), pct5h);
+                D2D1_COLOR_F col5 = (pct5h >= 50.0f) ? COL_GREEN : ((pct5h >= 20.0f) ? COL_AMBER : COL_RED);
+                DrawTextUtf8(b5, tfBold7, D2D1::RectF(inR - 140.0f, y5, inR, y5 + 15.0f), col5, DWRITE_TEXT_ALIGNMENT_TRAILING);
+
+                D2D1_RECT_F tr5 = D2D1::RectF(inL, y5 + 17.0f, inR, y5 + 23.0f);
+                FillRoundRect(tr5, 3.0f, HexColor(0x222228));
+                float fw5 = std::clamp(pct5h / 100.0f, 0.0f, 1.0f) * barW * ease;
+                if (fw5 > 1.0f) FillRoundRect(D2D1::RectF(inL, tr5.top, inL + fw5, tr5.bottom), 3.0f, col5);
+
+                // Bar 2: Weekly Limit Remaining
+                float yW = cardR.top + 72.0f;
+                DrawTextUtf8("Weekly Limit Remaining", tfBold7, D2D1::RectF(inL, yW, inL + 150.0f, yW + 15.0f), accentCol);
+                char bW[64];
+                std::snprintf(bW, sizeof(bW), "\xE2\x8F\xB3 %s  \xC2\xB7  %.1f%%", rstWk.c_str(), pctWk);
+                D2D1_COLOR_F colW = (pctWk >= 50.0f) ? accentCol : ((pctWk >= 20.0f) ? COL_AMBER : COL_RED);
+                DrawTextUtf8(bW, tfBold7, D2D1::RectF(inR - 140.0f, yW, inR, yW + 15.0f), colW, DWRITE_TEXT_ALIGNMENT_TRAILING);
+
+                D2D1_RECT_F trW = D2D1::RectF(inL, yW + 17.0f, inR, yW + 23.0f);
+                FillRoundRect(trW, 3.0f, HexColor(0x222228));
+                float fwW = std::clamp(pctWk / 100.0f, 0.0f, 1.0f) * barW * ease;
+                if (fwW > 1.0f) FillRoundRect(D2D1::RectF(inL, trW.top, inL + fwW, trW.bottom), 3.0f, colW);
+            };
+
+            float gem5h = static_cast<float>(q.gemini_5h_pct);
+            if (lerpSnap.count("__gemini_5h__")) gem5h = lerpSnap["__gemini_5h__"];
+            float gemWk = static_cast<float>(q.gemini_weekly_pct);
+            if (lerpSnap.count("__gemini_wk__")) gemWk = lerpSnap["__gemini_wk__"];
+
+            float cl5h = static_cast<float>(q.claude_5h_pct);
+            if (lerpSnap.count("__claude_5h__")) cl5h = lerpSnap["__claude_5h__"];
+            float clWk = static_cast<float>(q.claude_weekly_pct);
+            if (lerpSnap.count("__claude_wk__")) clWk = lerpSnap["__claude_wk__"];
+
+            drawPoolSummaryCard(r.left, "GO", COL_BLUE, HexColor(0x283B5B),
+                                "GEMINI MODELS QUOTA POOL", "Shared across Gemini 4 Argon & Gemini 3.8 Flash",
+                                gem5h, q.gemini_5h_reset, gemWk, q.gemini_weekly_reset);
+
+            drawPoolSummaryCard(r.left + colW + 12.0f, "CL", COL_PURPLE, HexColor(0x3E2B5B),
+                                "CLAUDE & GPT MODELS QUOTA POOL", "Shared across Claude Opus 5.5, Sonnet 5.5 & GPT-OSS",
+                                cl5h, q.claude_5h_reset, clWk, q.claude_weekly_reset);
+        }
+        curY += sumH + 14.0f;
+
         for (const char* provName : {"Google", "Anthropic", "OpenAI"}) {
             std::vector<QuotaModelInfo> mList;
             for (const auto& m : q.models) {
@@ -59,7 +132,9 @@
                 if (cy + cardH >= scrollArea.top && cy <= scrollArea.bottom) {
                     const auto& m = mList[idx];
                     D2D1_RECT_F cardR = D2D1::RectF(cx, cy, cx + colW, cy + cardH);
-                    DrawCard(cardR, 10.0f, COL_CARD, COL_BORDER);
+                    bool cardHov = (last_mouse.x >= cardR.left && last_mouse.x <= cardR.right &&
+                                    last_mouse.y >= cardR.top && last_mouse.y <= cardR.bottom);
+                    DrawCard(cardR, 10.0f, cardHov ? HexColor(0x18181C) : COL_CARD, cardHov ? HexColor(0x36363F) : COL_BORDER);
 
                     float inL = cardR.left + 14.0f;
                     float inR = cardR.right - 14.0f;
@@ -81,16 +156,20 @@
                         DrawTextUtf8("\xE2\x98\x85 REC", tfBold7, recR, COL_AMBER, DWRITE_TEXT_ALIGNMENT_CENTER);
                     }
 
-                    // Percentage Label
-                    D2D1_COLOR_F qCol = (m.remaining_pct >= 50.0) ? COL_GREEN : ((m.remaining_pct >= 20.0) ? COL_AMBER : COL_RED);
+                    // Percentage Label (uses spring-lerped value so numbers never jump!)
+                    float dispPct = static_cast<float>(m.remaining_pct);
+                    auto itL = lerpSnap.find(m.label);
+                    if (itL != lerpSnap.end()) dispPct = itL->second;
+
+                    D2D1_COLOR_F qCol = (dispPct >= 50.0f) ? COL_GREEN : ((dispPct >= 20.0f) ? COL_AMBER : COL_RED);
                     char pctBuf[32];
-                    std::snprintf(pctBuf, sizeof(pctBuf), "%.1f%%", m.remaining_pct);
+                    std::snprintf(pctBuf, sizeof(pctBuf), "%.1f%%", dispPct);
                     DrawTextUtf8(pctBuf, tfBold10, D2D1::RectF(inR - 70.0f, cardR.top + 10.0f, inR, cardR.top + 30.0f), qCol, DWRITE_TEXT_ALIGNMENT_TRAILING);
 
-                    // 6px Progress Bar
+                    // 6px Progress Bar (spring-lerped width, never resets to 0!)
                     D2D1_RECT_F barTrack = D2D1::RectF(inL, cardR.top + 38.0f, inR, cardR.top + 44.0f);
                     FillRoundRect(barTrack, 3.0f, HexColor(0x242424));
-                    float fillW = static_cast<float>((m.remaining_pct / 100.0) * (inR - inL)) * ease;
+                    float fillW = static_cast<float>((dispPct / 100.0f) * (inR - inL)) * ease;
                     if (fillW > 1.0f) {
                         FillRoundRect(D2D1::RectF(inL, barTrack.top, inL + fillW, barTrack.bottom), 3.0f, qCol);
                     }
@@ -216,26 +295,62 @@
     }
 
     // ========================================================================
-    // Popup Model Dropdown Menu
+    // Popup Model Dropdown Menu (Spring-Animated Scale + Sliding Hover Pill)
     // ========================================================================
     void RenderPopupMenu(float W, float H) {
-        float mw = 215.0f;
-        float itemH = 22.0f;
-        float mh = AVAILABLE_MODELS.size() * itemH + 8.0f;
+        float ease = 1.0f - std::pow(1.0f - std::clamp(popup_anim, 0.05f, 1.0f), 3.0f);
+        float mw = 218.0f;
+        float itemH = 26.0f;
+        float fullMh = static_cast<float>(AVAILABLE_MODELS.size()) * itemH + 10.0f;
+        float mh = fullMh * (0.82f + 0.18f * ease);
         float px = std::clamp(popup_x, 10.0f, W - mw - 10.0f);
-        float py = std::clamp(popup_y, 38.0f, H - mh - 10.0f);
+        float py = std::clamp(popup_y - (1.0f - ease) * 6.0f, 38.0f, H - fullMh - 10.0f);
+
+        std::string curSelected;
+        if (popup_target == "cli" && current_view.rfind("cli_", 0) == 0) {
+            curSelected = StripModelEffortSuffix(cli_instances[current_view].model);
+        } else if (popup_target.rfind("worker_", 0) == 0) {
+            int wIdx = std::stoi(popup_target.substr(7));
+            if (wIdx >= 0 && wIdx < 4) curSelected = StripModelEffortSuffix(workers[wIdx].model);
+        }
+
+        // Multi-layer drop shadow & backdrop mask so underlying text/lines never bleed through
+        FillRoundRect(D2D1::RectF(px - 4.0f, py - 2.0f, px + mw + 4.0f, py + mh + 6.0f), 11.0f, HexColor(0x000000, 0.65f * ease));
+        FillRoundRect(D2D1::RectF(px - 2.0f, py - 1.0f, px + mw + 2.0f, py + mh + 3.0f), 9.5f, HexColor(0x050507, 0.85f * ease));
 
         D2D1_RECT_F menuR = D2D1::RectF(px, py, px + mw, py + mh);
-        DrawCard(menuR, 8.0f, HexColor(0x181818), COL_CORAL_BDR, 1.2f);
+        DrawCard(menuR, 8.0f, HexColor(0x16161A, ease), HexColor(0x6E3B2B, ease), 1.3f);
 
-        float iy = py + 4.0f;
+        float iy = py + 5.0f;
         for (const auto& mod : AVAILABLE_MODELS) {
-            D2D1_RECT_F ir = D2D1::RectF(px + 4.0f, iy, px + mw - 4.0f, iy + itemH);
+            D2D1_RECT_F ir = D2D1::RectF(px + 5.0f, iy, px + mw - 5.0f, iy + itemH - 2.0f);
             std::string hid = "popup_select:" + mod;
-            if (hovered_id == hid) {
-                FillRoundRect(ir, 4.0f, COL_CORAL);
+            bool isHov = (hovered_id == hid);
+            bool isSel = (curSelected == mod);
+
+            if (isHov) {
+                FillRoundRect(ir, 5.0f, COL_CORAL);
+            } else if (isSel) {
+                FillRoundRect(ir, 5.0f, HexColor(0x26201D));
+                StrokeRoundRect(ir, 5.0f, HexColor(0x523025), 0.8f);
             }
-            DrawTextUtf8("  " + mod, tfRegular8, ir, (hovered_id == hid) ? HexColor(0x0D0D0D) : COL_TEXT_MAIN);
+
+            std::string prov, bdg;
+            GetModelProviderAndBadge(mod, prov, bdg);
+            D2D1_RECT_F bdgR = D2D1::RectF(ir.left + 6.0f, ir.top + 4.0f, ir.left + 26.0f, ir.bottom - 4.0f);
+            FillRoundRect(bdgR, 3.0f, isHov ? HexColor(0x18181B, 0.25f) : COL_PILL_BG);
+            D2D1_COLOR_F bCol = isHov ? HexColor(0x0D0D0D) : ((bdg == "GO") ? COL_BLUE : ((bdg == "CL") ? COL_PURPLE : COL_GREEN));
+            DrawTextUtf8(bdg, tfMonoBold7, bdgR, bCol, DWRITE_TEXT_ALIGNMENT_CENTER);
+
+            D2D1_COLOR_F txtCol = isHov ? HexColor(0x0D0D0D) : (isSel ? COL_CORAL : COL_TEXT_MAIN);
+            DrawTextUtf8(mod, (isHov || isSel) ? tfBold8 : tfRegular8,
+                         D2D1::RectF(ir.left + 32.0f, ir.top, ir.right - 22.0f, ir.bottom), txtCol);
+
+            if (isSel) {
+                DrawTextUtf8("\xE2\x9C\x93", tfBold8, D2D1::RectF(ir.right - 20.0f, ir.top, ir.right - 6.0f, ir.bottom),
+                             isHov ? HexColor(0x0D0D0D) : COL_CORAL, DWRITE_TEXT_ALIGNMENT_CENTER);
+            }
+
             AddHit(hid, ir);
             iy += itemH;
         }

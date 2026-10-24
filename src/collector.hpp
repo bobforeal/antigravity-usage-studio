@@ -29,7 +29,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <regex>
 #include <set>
 #include <sstream>
 #include <string>
@@ -37,6 +36,15 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+
+// ============================================================================
+// High-Resolution Timer Helper (Milliseconds)
+// ============================================================================
+inline double GetTimeSeconds() {
+    static const auto t0 = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration<double>(now - t0).count();
+}
 
 // ============================================================================
 // Lightweight Embedded JSON Value / Parser
@@ -312,7 +320,7 @@ inline double ComputeModelCost(const std::string& label, long long inp, long lon
         inRate = 5.00; cacheRate = 0.50; outRate = 25.00;
     } else if (low.find("sonnet") != std::string::npos) {
         inRate = 3.00; cacheRate = 0.30; outRate = 15.00;
-    } else if (low.find("argon") != std::string::npos) {
+    } else if (low.find("argon") != std::string::npos || low.find("pro") != std::string::npos) {
         if (low.find("high") != std::string::npos) {
             inRate = 1.25; cacheRate = 0.3125; outRate = 5.00;
         } else if (low.find("medium") != std::string::npos) {
@@ -376,8 +384,8 @@ inline std::string CleanSessionTitle(const std::string& rawText, const std::stri
                 cleaned = (s2 != std::string::npos) ? cleaned.substr(s2) : "";
             }
         }
-        if (cleaned.size() > 52) {
-            cleaned = cleaned.substr(0, 49) + "...";
+        if (cleaned.size() > 54) {
+            cleaned = cleaned.substr(0, 51) + "...";
         }
         if (!cleaned.empty()) return cleaned;
     }
@@ -414,7 +422,23 @@ struct QuotaData {
     bool has_secondary = false;
     long long avail_credits = 500;
     long long monthly_credits = 50000;
+    long long avail_flow_credits = 100;
+    long long monthly_flow_credits = 150000;
     bool has_credits = false;
+
+    // Real Weekly Limit & 5-Hour Limit buckets from LanguageServerService/RetrieveUserQuotaSummary
+    double gemini_weekly_pct = 100.0;
+    std::string gemini_weekly_reset = "5d 5h";
+    double gemini_5h_pct = 100.0;
+    std::string gemini_5h_reset = "3h 36m";
+
+    double claude_weekly_pct = 100.0;
+    std::string claude_weekly_reset = "6d 23h";
+    double claude_5h_pct = 100.0;
+    std::string claude_5h_reset = "4h 52m";
+
+    double weekly_remaining_pct = 100.0;
+    std::string weekly_reset_relative = "5d 5h";
 };
 
 struct HourlySlot {
@@ -503,8 +527,8 @@ struct AppSettings {
     std::string chart_mode = "cost";
     std::string default_effort = "medium";
     bool is_pinned = false;
-    int window_w = 1140;
-    int window_h = 780;
+    int window_w = 1160;
+    int window_h = 790;
     int window_x = -1;
     int window_y = -1;
 };
@@ -663,11 +687,13 @@ class AntigravityLiveRPC {
         outPorts.assign(portSet.begin(), portSet.end());
     }
 
-    static bool CallEndpoint(bool useHttps, int port, const std::string& csrfToken, JsonVal& outJson) {
-        HINTERNET hSession = WinHttpOpen(L"AntigravityUsageStudio/2.5", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    static bool CallEndpointRaw(bool useHttps, int port, const std::string& csrfToken, std::string& outBody,
+                                const wchar_t* rpcPath = L"/exa.language_server_pb.LanguageServerService/GetUserStatus",
+                                const char* customPayload = nullptr) {
+        HINTERNET hSession = WinHttpOpen(L"AntigravityUsageStudio/3.0", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (!hSession) return false;
 
-        WinHttpSetTimeouts(hSession, 1500, 1500, 1500, 1500);
+        WinHttpSetTimeouts(hSession, 900, 900, 900, 900);
         HINTERNET hConnect = WinHttpConnect(hSession, L"127.0.0.1", static_cast<INTERNET_PORT>(port), 0);
         if (!hConnect) {
             WinHttpCloseHandle(hSession);
@@ -678,7 +704,7 @@ class AntigravityLiveRPC {
         HINTERNET hRequest = WinHttpOpenRequest(
             hConnect,
             L"POST",
-            L"/exa.language_server_pb.LanguageServerService/GetUserStatus",
+            rpcPath,
             nullptr,
             WINHTTP_NO_REFERER,
             WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -703,31 +729,29 @@ class AntigravityLiveRPC {
             headers += L"X-Codeium-Csrf-Token: " + Utf8ToWide(csrfToken) + L"\r\n";
         }
 
-        static const char* kPayload = "{\"metadata\":{\"ideName\":\"antigravity\",\"extensionName\":\"antigravity\",\"locale\":\"en\"}}";
-        DWORD payloadLen = static_cast<DWORD>(std::strlen(kPayload));
+        static const char* kDefaultPayload = "{\"metadata\":{\"ideName\":\"antigravity\",\"extensionName\":\"antigravity\",\"locale\":\"en\"}}";
+        const char* payload = customPayload ? customPayload : kDefaultPayload;
+        DWORD payloadLen = static_cast<DWORD>(std::strlen(payload));
 
         bool ok = false;
-        if (WinHttpSendRequest(hRequest, headers.c_str(), static_cast<DWORD>(headers.size()), (LPVOID)kPayload, payloadLen, payloadLen, 0) &&
+        outBody.clear();
+        if (WinHttpSendRequest(hRequest, headers.c_str(), static_cast<DWORD>(headers.size()), (LPVOID)payload, payloadLen, payloadLen, 0) &&
             WinHttpReceiveResponse(hRequest, nullptr)) {
             DWORD statusCode = 0;
             DWORD statusSize = sizeof(statusCode);
             WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX);
             if (statusCode == 200) {
-                std::string body;
                 DWORD avail = 0;
                 while (WinHttpQueryDataAvailable(hRequest, &avail) && avail > 0) {
                     std::vector<char> chunk(avail);
                     DWORD read = 0;
                     if (WinHttpReadData(hRequest, chunk.data(), avail, &read) && read > 0) {
-                        body.append(chunk.data(), read);
+                        outBody.append(chunk.data(), read);
                     } else {
                         break;
                     }
                 }
-                if (!body.empty()) {
-                    outJson = MiniJsonParser::parse(body);
-                    ok = outJson.is_obj();
-                }
+                ok = !outBody.empty();
             }
         }
 
@@ -737,10 +761,17 @@ class AntigravityLiveRPC {
         return ok;
     }
 
+    static bool CallEndpoint(bool useHttps, int port, const std::string& csrfToken, JsonVal& outJson,
+                             const wchar_t* rpcPath = L"/exa.language_server_pb.LanguageServerService/GetUserStatus") {
+        std::string body;
+        if (!CallEndpointRaw(useHttps, port, csrfToken, body, rpcPath, nullptr)) return false;
+        outJson = MiniJsonParser::parse(body);
+        return outJson.is_obj();
+    }
+
 public:
     static bool FetchLiveUserStatus(JsonVal& outData) {
-        double nowSec = static_cast<double>( std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count()) / 1000.0;
+        double nowSec = GetTimeSeconds();
 
         if (cached_port > 0 && !cached_token.empty()) {
             if (CallEndpoint(cached_https, cached_port, cached_token, outData)) {
@@ -773,16 +804,30 @@ public:
             }
         }
 
-        if (last_successful_data.is_obj() && (nowSec - last_success_time < 30.0)) {
+        if (last_successful_data.is_obj() && (nowSec - last_success_time < 60.0)) {
             outData = last_successful_data;
             return true;
         }
         return false;
     }
+
+    static bool FetchUserQuotaSummary(JsonVal& outSummary) {
+        if (cached_port <= 0 || cached_token.empty()) return false;
+        return CallEndpoint(cached_https, cached_port, cached_token, outSummary,
+                            L"/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary");
+    }
+
+    static bool FetchTrajectoryGeneratorMetadataRaw(const std::string& cascadeId, std::string& outBody) {
+        if (cached_port <= 0 || cached_token.empty()) return false;
+        std::string payload = "{\"cascadeId\":\"" + cascadeId + "\"}";
+        return CallEndpointRaw(cached_https, cached_port, cached_token, outBody,
+                               L"/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata",
+                               payload.c_str());
+    }
 };
 
 // ============================================================================
-// Telemetry & Session Data Collector
+// Telemetry & Session Data Collector (Pre-Cached for All 5 Ranges!)
 // ============================================================================
 struct ParsedEvent {
     long long ts_epoch = 0;
@@ -817,11 +862,12 @@ struct ParsedSession {
 
 class AntigravityDataCollector {
     inline static std::unordered_map<std::string, ParsedSession> session_cache;
+    inline static std::unordered_map<std::string, std::string> db_titles_cache;
+    inline static long long db_titles_mtime = 0;
     inline static std::string latest_detected_model;
     inline static std::mutex cache_mutex;
 
     static long long ParseIsoTimestamp(const std::string& iso, std::string& outDateStr, int& outHour) {
-        // Format: YYYY-MM-DDTHH:MM:SS...
         if (iso.size() < 19) return 0;
         int Y = 0, M = 0, D = 0, h = 0, m = 0, s = 0;
         if (std::sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &Y, &M, &D, &h, &m, &s) < 6) return 0;
@@ -837,7 +883,6 @@ class AntigravityDataCollector {
         time_t epoch = _mkgmtime(&tmUtc);
         if (epoch == -1) return 0;
 
-        // Check timezone offset if not Z
         size_t tzPos = iso.find_first_of("+-Z", 19);
         if (tzPos != std::string::npos && iso[tzPos] != 'Z') {
             int tzH = 0, tzM = 0;
@@ -872,13 +917,14 @@ class AntigravityDataCollector {
         time_t nowEpoch = std::time(nullptr);
         long long diff = static_cast<long long>(resetEpoch - nowEpoch);
         if (diff <= 0) return "soon";
-        long long hours = diff / 3600;
+        long long days = diff / 86400;
+        long long hours = (diff % 86400) / 3600;
         long long mins = (diff % 3600) / 60;
+        if (days > 0) return std::to_string(days) + "d " + std::to_string(hours) + "h";
         if (hours > 0) return std::to_string(hours) + "h " + std::to_string(mins) + "m";
         return std::to_string(mins) + "m";
     }
 
-    // Fast scanner for a single JSONL line to avoid full DOM parse on lines without tokens or settings
     static bool ExtractJsonStringField(const std::string& line, const char* keyPattern, std::string& outVal) {
         size_t pos = line.find(keyPattern);
         if (pos == std::string::npos) return false;
@@ -923,6 +969,72 @@ class AntigravityDataCollector {
         }
         outVal = v;
         return true;
+    }
+
+    static std::string MapPlaceholderToLabel(const std::string& ph) {
+        if (ph == "MODEL_PLACEHOLDER_M417") return "Gemini 4 Argon (High)";
+        if (ph == "MODEL_PLACEHOLDER_M418") return "Gemini 4 Argon (Medium)";
+        if (ph == "MODEL_PLACEHOLDER_M419") return "Gemini 4 Argon (Low)";
+        if (ph == "MODEL_PLACEHOLDER_M318") return "Gemini 3.8 Flash (High)";
+        if (ph == "MODEL_PLACEHOLDER_M319") return "Gemini 3.8 Flash (Medium)";
+        if (ph == "MODEL_PLACEHOLDER_M320") return "Gemini 3.8 Flash (Low)";
+        if (ph == "MODEL_PLACEHOLDER_M322") return "Gemini 3.8 Flash (Medium)";
+        if (ph == "MODEL_PLACEHOLDER_M298") return "Gemini 3.7 Flash (High)";
+        if (ph == "MODEL_PLACEHOLDER_M402") return "Claude Opus 5.5 (High)";
+        if (ph == "MODEL_PLACEHOLDER_M401") return "Claude Opus 5.5 (Medium)";
+        if (ph == "MODEL_PLACEHOLDER_M400") return "Claude Opus 5.5 (Low)";
+        if (ph == "MODEL_PLACEHOLDER_M405") return "Claude Sonnet 5.5 (High)";
+        if (ph == "MODEL_PLACEHOLDER_M404") return "Claude Sonnet 5.5 (Medium)";
+        if (ph == "MODEL_PLACEHOLDER_M403") return "Claude Sonnet 5.5 (Low)";
+        if (ph.find("GPT_OSS") != std::string::npos) return "GPT-OSS 120B (Medium)";
+        return "";
+    }
+
+    // Fast O(N) scanner for GetCascadeTrajectoryGeneratorMetadata raw JSON
+    static std::unordered_map<int, std::string> FetchStepModelMapFromRPC(const std::string& cid, std::string& outLastModel) {
+        std::unordered_map<int, std::string> stepMap;
+        std::string raw;
+        if (!AntigravityLiveRPC::FetchTrajectoryGeneratorMetadataRaw(cid, raw) || raw.empty()) {
+            return stepMap;
+        }
+        size_t pos = 0;
+        while ((pos = raw.find("\"stepIndices\"", pos)) != std::string::npos) {
+            size_t bOpen = raw.find('[', pos);
+            size_t bClose = (bOpen != std::string::npos) ? raw.find(']', bOpen) : std::string::npos;
+            if (bClose == std::string::npos || bClose - bOpen > 256) {
+                pos += 13;
+                continue;
+            }
+            std::vector<int> indices;
+            size_t cur = bOpen + 1;
+            while (cur < bClose) {
+                while (cur < bClose && (raw[cur] < '0' || raw[cur] > '9')) ++cur;
+                if (cur >= bClose) break;
+                int v = 0;
+                while (cur < bClose && raw[cur] >= '0' && raw[cur] <= '9') {
+                    v = v * 10 + (raw[cur] - '0');
+                    ++cur;
+                }
+                indices.push_back(v);
+            }
+            size_t mPos = raw.find("\"model\"", bClose);
+            if (mPos != std::string::npos && mPos - bClose < 300) {
+                size_t q1 = raw.find('"', mPos + 7);
+                size_t q2 = (q1 != std::string::npos) ? raw.find('"', q1 + 1) : std::string::npos;
+                if (q2 != std::string::npos && q2 - q1 < 64) {
+                    std::string ph = raw.substr(q1 + 1, q2 - q1 - 1);
+                    std::string lbl = MapPlaceholderToLabel(ph);
+                    if (!lbl.empty()) {
+                        outLastModel = lbl;
+                        for (int idx : indices) {
+                            stepMap[idx] = lbl;
+                        }
+                    }
+                }
+            }
+            pos = bClose + 1;
+        }
+        return stepMap;
     }
 
     static ParsedSession ParseSessionDirectory(const fs::path& sdir) {
@@ -982,12 +1094,29 @@ class AntigravityDataCollector {
         std::string currentModel = "Gemini 3.8 Flash (Medium)";
         std::string detectedModel;
 
+        std::string rpcLastModel;
+        auto rpcStepModels = FetchStepModelMapFromRPC(cid, rpcLastModel);
+        if (!rpcLastModel.empty()) {
+            currentModel = rpcLastModel;
+            detectedModel = rpcLastModel;
+        }
+
         if (hasTranscript) {
             std::ifstream f(transcriptPath);
             std::string line;
             while (std::getline(f, line)) {
                 if (line.empty()) continue;
                 ps.step_count++;
+
+                long long stepIdxVal = -1;
+                ExtractJsonIntField(line, "\"step_index\"", stepIdxVal);
+                if (stepIdxVal >= 0) {
+                    auto itSm = rpcStepModels.find(static_cast<int>(stepIdxVal));
+                    if (itSm != rpcStepModels.end()) {
+                        currentModel = itSm->second;
+                        detectedModel = itSm->second;
+                    }
+                }
 
                 if (ps.first_prompt.empty()) {
                     if (line.find("<USER_REQUEST>") != std::string::npos ||
@@ -1000,25 +1129,19 @@ class AntigravityDataCollector {
                     }
                 }
 
-                if (line.find("<USER_SETTINGS_CHANGE>") != std::string::npos) {
-                    std::string content;
-                    if (ExtractJsonStringField(line, "\"content\"", content) && content.find("<USER_SETTINGS_CHANGE>") != std::string::npos) {
-                        size_t pm = content.find("Model Selection` from ");
-                        if (pm != std::string::npos) {
-                            size_t pto = content.find(" to ", pm);
-                            if (pto != std::string::npos) {
-                                pto += 4;
-                                size_t pnl = content.find('\n', pto);
-                                size_t endDot = (pnl != std::string::npos) ? pnl : content.size();
-                                while (endDot > pto && (content[endDot - 1] == '\r' || content[endDot - 1] == ' ' || content[endDot - 1] == '.')) {
-                                    --endDot;
-                                }
-                                std::string val = content.substr(pto, endDot - pto);
-                                if (!val.empty() && val.size() <= 40 && val.find('\\') == std::string::npos &&
-                                    val.find('[') == std::string::npos && ToLowerAscii(val) != "none") {
-                                    currentModel = val;
-                                    detectedModel = val;
-                                }
+                if (line.find("Model Selection` from ") != std::string::npos) {
+                    size_t pm = line.find("Model Selection` from ");
+                    size_t pto = line.find(" to ", pm);
+                    if (pto != std::string::npos) {
+                        pto += 4;
+                        size_t pend = line.find(". No need", pto);
+                        if (pend == std::string::npos) pend = line.find("\\n", pto);
+                        if (pend != std::string::npos && pend > pto && pend - pto <= 40) {
+                            std::string val = line.substr(pto, pend - pto);
+                            if (!val.empty() && val.find('\\') == std::string::npos &&
+                                val.find('[') == std::string::npos && ToLowerAscii(val) != "none") {
+                                currentModel = val;
+                                detectedModel = val;
                             }
                         }
                     }
@@ -1063,10 +1186,24 @@ class AntigravityDataCollector {
     }
 
     static std::unordered_map<std::string, std::string> LoadDbSessionTitles() {
-        std::unordered_map<std::string, std::string> titles;
         fs::path dbPath = fs::path(GetUserHomeDir()) / ".gemini" / "antigravity" / "conversation_summaries.db";
-        if (!fs::exists(dbPath)) return titles;
+        if (!fs::exists(dbPath)) return {};
 
+        long long curMtime = 0;
+        try {
+            auto ftime = fs::last_write_time(dbPath);
+            auto sctp = std::chrono::time_point_cast<std::chrono::seconds>(ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+            curMtime = sctp.time_since_epoch().count();
+        } catch (...) {}
+
+        {
+            std::lock_guard<std::mutex> lk(cache_mutex);
+            if (!db_titles_cache.empty() && curMtime == db_titles_mtime) {
+                return db_titles_cache;
+            }
+        }
+
+        std::unordered_map<std::string, std::string> titles;
         HMODULE hSql = LoadLibraryW(L"winsqlite3.dll");
         if (!hSql) return titles;
 
@@ -1108,6 +1245,12 @@ class AntigravityDataCollector {
             }
         }
         FreeLibrary(hSql);
+
+        {
+            std::lock_guard<std::mutex> lk(cache_mutex);
+            db_titles_cache = titles;
+            db_titles_mtime = curMtime;
+        }
         return titles;
     }
 
@@ -1132,6 +1275,41 @@ public:
             q.has_credits = true;
             q.avail_credits = ps.integer("availablePromptCredits", 500);
             q.monthly_credits = ps.get("planInfo").integer("monthlyPromptCredits", 50000);
+            q.avail_flow_credits = ps.integer("availableFlowCredits", 100);
+            q.monthly_flow_credits = ps.get("planInfo").integer("monthlyFlowCredits", 150000);
+        }
+
+        // Query real Weekly Limit & 5-Hour Limit buckets from RetrieveUserQuotaSummary RPC
+        JsonVal qSum;
+        if (AntigravityLiveRPC::FetchUserQuotaSummary(qSum)) {
+            const JsonVal& groups = qSum.get("response").get("groups");
+            if (groups.is_arr()) {
+                for (const auto& grp : groups.a) {
+                    const JsonVal& buckets = grp.get("buckets");
+                    if (!buckets.is_arr()) continue;
+                    for (const auto& bkt : buckets.a) {
+                        std::string bid = bkt.str("bucketId", "");
+                        double remFrac = bkt.num("remainingFraction", 1.0);
+                        double remPct = std::round(remFrac * 1000.0) / 10.0;
+                        std::string rstRel = ComputeRelativeReset(bkt.str("resetTime", ""));
+                        if (bid == "gemini-weekly") {
+                            q.gemini_weekly_pct = remPct;
+                            if (!rstRel.empty()) q.gemini_weekly_reset = rstRel;
+                        } else if (bid == "gemini-5h") {
+                            q.gemini_5h_pct = remPct;
+                            if (!rstRel.empty()) q.gemini_5h_reset = rstRel;
+                        } else if (bid == "3p-weekly") {
+                            q.claude_weekly_pct = remPct;
+                            if (!rstRel.empty()) q.claude_weekly_reset = rstRel;
+                        } else if (bid == "3p-5h") {
+                            q.claude_5h_pct = remPct;
+                            if (!rstRel.empty()) q.claude_5h_reset = rstRel;
+                        }
+                    }
+                }
+            }
+            q.weekly_remaining_pct = q.gemini_weekly_pct;
+            q.weekly_reset_relative = q.gemini_weekly_reset;
         }
 
         const JsonVal& configs = us.get("cascadeModelConfigData").get("clientModelConfigs");
@@ -1212,9 +1390,10 @@ public:
         return q;
     }
 
-    static DashboardData GetDashboardData(const std::string& selectedRange, const QuotaData& quotaData) {
-        DashboardData d;
-        d.selected_range = selectedRange;
+    // Build all 5 ranges in one pass so switching ranges or tabs in the UI is 0ms O(1) lookup!
+    static std::map<std::string, DashboardData> GetAllDashboards(const QuotaData& quotaData) {
+        std::map<std::string, DashboardData> results;
+        const std::vector<std::string> kAllRanges = {"today_active", "today_24h", "7d", "30d", "all"};
 
         time_t nowEpoch = std::time(nullptr);
         std::tm tmNow{};
@@ -1243,84 +1422,20 @@ public:
             latest_detected_model = parsedSessions[0].detected_model;
         }
 
-        // 24 rolling hourly slots
-        std::tm tmHour = tmNow;
-        tmHour.tm_min = 0;
-        tmHour.tm_sec = 0;
-        time_t curHourEpoch = std::mktime(&tmHour);
-
-        std::map<int, size_t> slotIdxByHour;
-        for (int i = 23; i >= 0; --i) {
-            time_t slotEpoch = curHourEpoch - i * 3600;
-            std::tm tmSlot{};
-            localtime_s(&tmSlot, &slotEpoch);
-            HourlySlot hs;
-            hs.hour = tmSlot.tm_hour;
-            hs.label = std::to_string(hs.hour) + ":00";
-            char dispBuf[16];
-            std::snprintf(dispBuf, sizeof(dispBuf), "%02d:00", hs.hour);
-            hs.display = dispBuf;
-            slotIdxByHour[hs.hour] = d.hourly_slots.size();
-            d.hourly_slots.push_back(hs);
-        }
-
-        long long cutoff24h = static_cast<long long>(nowEpoch) - 86400;
-        long long cutoff7d  = static_cast<long long>(nowEpoch) - 7 * 86400;
-        long long cutoff30d = static_cast<long long>(nowEpoch) - 30 * 86400;
-
+        // Precompute shared 52-week Heatmap + Sessions List once per poll
         struct DailyStat { long long tokens = 0; int steps = 0; double cost = 0.0; };
         std::unordered_map<std::string, DailyStat> dailyStats;
-        std::map<std::string, ModelUsageRow> modelsAgg;
-
         for (const auto& s : parsedSessions) {
-            bool isTodaySess = (s.date_str == todayStr) || (s.sess_dates.count(todayStr) > 0);
-
             for (const auto& ev : s.events) {
                 auto& ds = dailyStats[ev.date_str];
                 ds.tokens += (ev.inp + ev.cache + ev.out);
                 ds.steps += 1;
                 ds.cost += ev.cost;
             }
-
-            if (selectedRange == "today_active" && !isTodaySess) continue;
-
-            for (const auto& ev : s.events) {
-                if (selectedRange == "today_24h" && ev.ts_epoch < cutoff24h) continue;
-                if (selectedRange == "7d" && ev.ts_epoch < cutoff7d) continue;
-                if (selectedRange == "30d" && ev.ts_epoch < cutoff30d) continue;
-
-                long long tok = ev.inp + ev.cache + ev.out;
-                d.total_cost += ev.cost;
-                d.total_requests += 1;
-                d.total_input += ev.inp;
-                d.total_cache += ev.cache;
-                d.total_output += ev.out;
-                d.total_tokens += tok;
-
-                auto& mRow = modelsAgg[ev.model_label];
-                mRow.label = ev.model_label;
-                mRow.requests += 1;
-                mRow.input += ev.inp;
-                mRow.cache_read += ev.cache;
-                mRow.output += ev.out;
-                mRow.total_tokens += tok;
-                mRow.cost += ev.cost;
-
-                auto itSlot = slotIdxByHour.find(ev.hour_int);
-                if (itSlot != slotIdxByHour.end()) {
-                    auto& slot = d.hourly_slots[itSlot->second];
-                    slot.cost += ev.cost;
-                    slot.tokens += tok;
-                    slot.requests += 1;
-                }
-            }
         }
 
-        long long cacheDenom = d.total_input + d.total_cache;
-        d.cache_hit_pct = (cacheDenom > 0) ? (std::round((static_cast<double>(d.total_cache) / cacheDenom) * 1000.0) / 10.0) : 0.0;
-
-        // Build 52-week Heatmap
-        int todayWday = (tmNow.tm_wday + 6) % 7; // Monday = 0 .. Sunday = 6
+        HeatmapData sharedHeatmap;
+        int todayWday = (tmNow.tm_wday + 6) % 7;
         std::tm tmMonday = tmNow;
         tmMonday.tm_hour = 12; tmMonday.tm_min = 0; tmMonday.tm_sec = 0;
         time_t mondayEpoch = std::mktime(&tmMonday) - todayWday * 86400;
@@ -1342,7 +1457,7 @@ public:
                 }
             }
         }
-        d.heatmap.max_daily_tokens = maxDailyTok;
+        sharedHeatmap.max_daily_tokens = maxDailyTok;
 
         static const char* kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
         for (int w = 0; w < 52; ++w) {
@@ -1371,9 +1486,9 @@ public:
                 }
 
                 if (!cell.is_future) {
-                    d.heatmap.total_tokens += cell.tokens;
-                    d.heatmap.total_steps += cell.steps;
-                    if (cell.tokens > 0 || cell.steps > 0) d.heatmap.active_days++;
+                    sharedHeatmap.total_tokens += cell.tokens;
+                    sharedHeatmap.total_steps += cell.steps;
+                    if (cell.tokens > 0 || cell.steps > 0) sharedHeatmap.active_days++;
                 }
 
                 if (cell.is_future || (cell.tokens == 0 && cell.steps == 0)) {
@@ -1393,10 +1508,9 @@ public:
                 }
                 weekCells.push_back(cell);
             }
-            d.heatmap.weeks.push_back(weekCells);
+            sharedHeatmap.weeks.push_back(weekCells);
         }
 
-        // Streak calculation
         int streak = 0;
         time_t checkEpoch = std::mktime(&tmMonday) + todayWday * 86400;
         auto itToday = dailyStats.find(todayStr);
@@ -1417,63 +1531,12 @@ public:
                 break;
             }
         }
-        d.heatmap.streak = streak;
+        sharedHeatmap.streak = streak;
 
-        // Models Table
-        std::set<std::string> providersSeen;
-        for (auto& [lbl, mRow] : modelsAgg) {
-            GetModelProviderAndBadge(lbl, mRow.provider, mRow.badge);
-            providersSeen.insert(mRow.provider);
-            auto itQ = quotaData.models_by_label.find(lbl);
-            if (itQ != quotaData.models_by_label.end()) {
-                mRow.has_quota = true;
-                mRow.remaining_pct = itQ->second.remaining_pct;
-                mRow.reset_relative = itQ->second.reset_relative;
-            }
-            d.models_table.push_back(mRow);
-        }
-
-        std::sort(d.models_table.begin(), d.models_table.end(), [](const ModelUsageRow& a, const ModelUsageRow& b) {
-            if (std::abs(a.cost - b.cost) > 1e-6) return a.cost > b.cost;
-            return a.total_tokens > b.total_tokens;
-        });
-
-        static const char* kKeyModels[] = {
-            "Gemini 4 Argon (High)",
-            "Gemini 4 Argon (Medium)",
-            "Gemini 3.8 Flash (Medium)",
-            "Claude Sonnet 5.5 (High)",
-            "Claude Opus 5.5 (High)",
-            "GPT-OSS 120B (Medium)"
-        };
-        for (const char* fallbackLbl : kKeyModels) {
-            if (d.models_table.size() >= 8) break;
-            bool exists = false;
-            for (const auto& m : d.models_table) {
-                if (m.label == fallbackLbl) { exists = true; break; }
-            }
-            if (!exists) {
-                auto itQ = quotaData.models_by_label.find(fallbackLbl);
-                if (itQ != quotaData.models_by_label.end()) {
-                    ModelUsageRow row;
-                    row.label = fallbackLbl;
-                    row.provider = itQ->second.provider;
-                    row.badge = itQ->second.badge;
-                    row.has_quota = true;
-                    row.remaining_pct = itQ->second.remaining_pct;
-                    row.reset_relative = itQ->second.reset_relative;
-                    providersSeen.insert(row.provider);
-                    d.models_table.push_back(row);
-                }
-            }
-        }
-        d.models_count = static_cast<int>(d.models_table.size());
-        if (d.models_table.size() > 8) d.models_table.resize(8);
-        d.providers_count = std::max(1, static_cast<int>(providersSeen.size()));
-
-        // Sessions Table (Top 40)
+        // Shared Sessions Table (Top 50)
         auto dbTitles = LoadDbSessionTitles();
-        size_t maxSess = std::min<size_t>(40, parsedSessions.size());
+        std::vector<SessionRow> sharedSessions;
+        size_t maxSess = std::min<size_t>(50, parsedSessions.size());
         for (size_t i = 0; i < maxSess; ++i) {
             const auto& ps = parsedSessions[i];
             SessionRow sr;
@@ -1494,9 +1557,143 @@ public:
             sr.cost = ps.cost;
             sr.last_modified_full = ps.last_modified_full;
             sr.is_active_recent = ps.is_active_recent;
-            d.sessions_list.push_back(sr);
+            sharedSessions.push_back(sr);
         }
 
-        return d;
+        // 24 rolling hourly slots template
+        std::tm tmHour = tmNow;
+        tmHour.tm_min = 0;
+        tmHour.tm_sec = 0;
+        time_t curHourEpoch = std::mktime(&tmHour);
+
+        std::vector<HourlySlot> baseHourlySlots;
+        std::map<int, size_t> slotIdxByHour;
+        for (int i = 23; i >= 0; --i) {
+            time_t slotEpoch = curHourEpoch - i * 3600;
+            std::tm tmSlot{};
+            localtime_s(&tmSlot, &slotEpoch);
+            HourlySlot hs;
+            hs.hour = tmSlot.tm_hour;
+            hs.label = std::to_string(hs.hour) + ":00";
+            char dispBuf[16];
+            std::snprintf(dispBuf, sizeof(dispBuf), "%02d:00", hs.hour);
+            hs.display = dispBuf;
+            slotIdxByHour[hs.hour] = baseHourlySlots.size();
+            baseHourlySlots.push_back(hs);
+        }
+
+        long long cutoff24h = static_cast<long long>(nowEpoch) - 86400;
+        long long cutoff7d  = static_cast<long long>(nowEpoch) - 7 * 86400;
+        long long cutoff30d = static_cast<long long>(nowEpoch) - 30 * 86400;
+
+        for (const std::string& rKey : kAllRanges) {
+            DashboardData d;
+            d.selected_range = rKey;
+            d.hourly_slots = baseHourlySlots;
+            d.heatmap = sharedHeatmap;
+            d.sessions_list = sharedSessions;
+
+            std::map<std::string, ModelUsageRow> modelsAgg;
+
+            for (const auto& s : parsedSessions) {
+                bool isTodaySess = (s.date_str == todayStr) || (s.sess_dates.count(todayStr) > 0);
+                if (rKey == "today_active" && !isTodaySess) continue;
+
+                for (const auto& ev : s.events) {
+                    if (rKey == "today_24h" && ev.ts_epoch < cutoff24h) continue;
+                    if (rKey == "7d" && ev.ts_epoch < cutoff7d) continue;
+                    if (rKey == "30d" && ev.ts_epoch < cutoff30d) continue;
+
+                    long long tok = ev.inp + ev.cache + ev.out;
+                    d.total_cost += ev.cost;
+                    d.total_requests += 1;
+                    d.total_input += ev.inp;
+                    d.total_cache += ev.cache;
+                    d.total_output += ev.out;
+                    d.total_tokens += tok;
+
+                    auto& mRow = modelsAgg[ev.model_label];
+                    mRow.label = ev.model_label;
+                    mRow.requests += 1;
+                    mRow.input += ev.inp;
+                    mRow.cache_read += ev.cache;
+                    mRow.output += ev.out;
+                    mRow.total_tokens += tok;
+                    mRow.cost += ev.cost;
+
+                    auto itSlot = slotIdxByHour.find(ev.hour_int);
+                    if (itSlot != slotIdxByHour.end()) {
+                        auto& slot = d.hourly_slots[itSlot->second];
+                        slot.cost += ev.cost;
+                        slot.tokens += tok;
+                        slot.requests += 1;
+                    }
+                }
+            }
+
+            long long cacheDenom = d.total_input + d.total_cache;
+            d.cache_hit_pct = (cacheDenom > 0) ? (std::round((static_cast<double>(d.total_cache) / cacheDenom) * 1000.0) / 10.0) : 0.0;
+
+            std::set<std::string> providersSeen;
+            for (auto& [lbl, mRow] : modelsAgg) {
+                GetModelProviderAndBadge(lbl, mRow.provider, mRow.badge);
+                providersSeen.insert(mRow.provider);
+                auto itQ = quotaData.models_by_label.find(lbl);
+                if (itQ != quotaData.models_by_label.end()) {
+                    mRow.has_quota = true;
+                    mRow.remaining_pct = itQ->second.remaining_pct;
+                    mRow.reset_relative = itQ->second.reset_relative;
+                }
+                d.models_table.push_back(mRow);
+            }
+
+            std::sort(d.models_table.begin(), d.models_table.end(), [](const ModelUsageRow& a, const ModelUsageRow& b) {
+                if (std::abs(a.cost - b.cost) > 1e-6) return a.cost > b.cost;
+                return a.total_tokens > b.total_tokens;
+            });
+
+            static const char* kKeyModels[] = {
+                "Gemini 4 Argon (High)",
+                "Gemini 4 Argon (Medium)",
+                "Gemini 3.8 Flash (Medium)",
+                "Claude Sonnet 5.5 (High)",
+                "Claude Opus 5.5 (High)",
+                "GPT-OSS 120B (Medium)"
+            };
+            for (const char* fallbackLbl : kKeyModels) {
+                if (d.models_table.size() >= 8) break;
+                bool exists = false;
+                for (const auto& m : d.models_table) {
+                    if (m.label == fallbackLbl) { exists = true; break; }
+                }
+                if (!exists) {
+                    auto itQ = quotaData.models_by_label.find(fallbackLbl);
+                    if (itQ != quotaData.models_by_label.end()) {
+                        ModelUsageRow row;
+                        row.label = fallbackLbl;
+                        row.provider = itQ->second.provider;
+                        row.badge = itQ->second.badge;
+                        row.has_quota = true;
+                        row.remaining_pct = itQ->second.remaining_pct;
+                        row.reset_relative = itQ->second.reset_relative;
+                        providersSeen.insert(row.provider);
+                        d.models_table.push_back(row);
+                    }
+                }
+            }
+            d.models_count = static_cast<int>(d.models_table.size());
+            if (d.models_table.size() > 8) d.models_table.resize(8);
+            d.providers_count = std::max(1, static_cast<int>(providersSeen.size()));
+
+            results[rKey] = std::move(d);
+        }
+
+        return results;
+    }
+
+    static DashboardData GetDashboardData(const std::string& selectedRange, const QuotaData& quotaData) {
+        auto all = GetAllDashboards(quotaData);
+        auto it = all.find(selectedRange);
+        return (it != all.end()) ? it->second : all["today_active"];
     }
 };

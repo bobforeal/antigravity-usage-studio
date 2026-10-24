@@ -53,25 +53,38 @@ static const D2D1_COLOR_F COL_CORAL_BDR   = HexColor(0x6E3B2B);
 static const D2D1_COLOR_F COL_BAR         = HexColor(0xB4B4B4);
 static const D2D1_COLOR_F COL_BAR_HOVER   = HexColor(0x38C77B);
 
+// Clean base model families (Reasoning effort is controlled separately by the [low · medium · high · max] pills!)
 static const std::vector<std::string> AVAILABLE_MODELS = {
-    "Gemini 4 Argon (High)",
-    "Gemini 4 Argon (Medium)",
-    "Gemini 4 Argon (Low)",
-    "Gemini 3.8 Flash (Medium)",
-    "Gemini 3.8 Flash (High)",
-    "Gemini 3.8 Flash (Low)",
-    "Claude Sonnet 5.5 (High)",
-    "Claude Sonnet 5.5 (Medium)",
-    "Claude Opus 5.5 (High)",
-    "Claude Opus 5.5 (Medium)",
-    "GPT-OSS 120B (Medium)"
+    "Gemini 4 Argon",
+    "Gemini 3.8 Flash",
+    "Claude Sonnet 5.5",
+    "Claude Opus 5.5",
+    "GPT-OSS 120B"
 };
 
 static const std::vector<std::string> AVAILABLE_EFFORTS = {"low", "medium", "high", "max"};
 
+inline std::string StripModelEffortSuffix(const std::string& label) {
+    size_t p = label.find('(');
+    std::string base = (p != std::string::npos) ? label.substr(0, p) : label;
+    while (!base.empty() && base.back() == ' ') base.pop_back();
+    return base;
+}
+
 struct ClickRegion {
     std::string id;
     D2D1_RECT_F rect;
+};
+
+struct AnimatedSelectorPill {
+    float x1 = 0.0f;
+    float x2 = 0.0f;
+    float target_x1 = 0.0f;
+    float target_x2 = 0.0f;
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+    float flash_alpha = 0.0f;
+    bool initialized = false;
 };
 
 struct TermLine {
@@ -82,7 +95,7 @@ struct TermLine {
 struct CLISession {
     std::string id;
     std::string name;
-    std::string model = "Gemini 4 Argon (Medium)";
+    std::string model = "Gemini 4 Argon";
     std::string effort = "medium";
     bool is_running = false;
     std::vector<TermLine> lines;
@@ -91,9 +104,7 @@ struct CLISession {
     CLISession() = default;
     CLISession(const std::string& tid, const std::string& tname, const std::string& eff)
         : id(tid), name(tname), effort(eff) {
-        std::string capEff = eff;
-        if (!capEff.empty()) capEff[0] = static_cast<char>(std::toupper(capEff[0]));
-        model = (eff == "max") ? "Gemini 4 Argon (High)" : ("Gemini 4 Argon (" + capEff + ")");
+        model = "Gemini 4 Argon";
         lines = {
             {"tool", "● Explore(Explore codebase structure and active components)"},
             {"sub",  "  ⎿ Done (17 tool uses · 44.2k tokens · 2.4s)"},
@@ -121,6 +132,16 @@ struct WorkerCardState {
     float anim_phase = 0.0f;
     float progress_fill = 0.0f;
     std::vector<std::string> logs;
+};
+
+struct TransferPacket {
+    int from_node = 0; // -1 = Master Goal, 0..3 = Worker #1..#4
+    int to_node = 1;   // 0..3 = Worker #1..#4
+    float progress = 0.0f;
+    float speed = 0.85f;
+    std::string icon = "\xF0\x9F\x93\x81"; // 📁
+    std::string label = "core.hpp";
+    uint32_t color = 0xD97757;
 };
 
 struct FileEntry {

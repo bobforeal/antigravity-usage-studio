@@ -488,10 +488,10 @@ class AntigravityDataCollector:
                                     first_prompt = content
 
                             if "<USER_SETTINGS_CHANGE>" in content:
-                                m_mod = re.search(r"Model Selection` from .*? to ([^\n]+?)\.(?:\s|$)", content)
+                                m_mod = re.search(r"Model Selection` from [^\n]*? to ([^\n]+?)\. No need", content)
                                 if m_mod:
                                     val = m_mod.group(1).strip()
-                                    if val and val.lower() != "none":
+                                    if val and val.lower() != "none" and len(val) <= 40:
                                         current_model = val
                                         detected_model = val
 

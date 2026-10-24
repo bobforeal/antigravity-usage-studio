@@ -1,8 +1,8 @@
 @echo off
-title Antigravity Usage Studio Launcher
+title Antigravity Usage Studio Launcher (Native C++20 Direct2D)
 cd /d "%~dp0"
-if exist "%LocalAppData%\Programs\Python\Python311\pythonw.exe" (
-    start "" "%LocalAppData%\Programs\Python\Python311\pythonw.exe" "hud_app.py"
+if exist "antigravity-hud.exe" (
+    start "" "%~dp0antigravity-hud.exe"
 ) else (
     start pythonw hud_app.py
 )
